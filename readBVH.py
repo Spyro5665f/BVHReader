@@ -1,0 +1,54 @@
+from bvh import Bvh
+import numpy as np
+import torch
+
+
+# --- Load and parse BVH ---
+def load_bvh_file(filepath):
+    with open(filepath, 'r') as f:
+        mocap = Bvh(f.read())
+
+    joints = [j.name for j in mocap.get_joints()]
+    frames = np.array(mocap.frames, dtype=np.float32)
+    return mocap, frames, joints
+
+
+# --- Encode Euler angles as sin/cos pairs for better continuity ---
+def encode_pose_angles(frames):
+    rad = np.radians(frames)
+    sin = np.sin(rad)
+    cos = np.cos(rad)
+    return np.concatenate([sin, cos], axis=-1)
+
+
+# Function to extract channel values for a specific joint
+def get_joint_channel_values(mocap, joint_name, frame_idx):
+    channels = mocap.joint_channels(joint_name)  # Get the channel names for the joint
+    num_channels = len(channels)
+    start_idx = mocap.get_joint_index(joint_name)  # Get the index of the joint in the motion data
+    frame_data = mocap.frames[frame_idx]  # Get the frame data for the specified frame
+    channel_values = frame_data[
+                     start_idx:start_idx + num_channels]  # Get the values for the joint at the specified frame
+
+    channel_values_dict = {channels[i]: channel_values[i] for i in
+                           range(num_channels)}  # Create a dictionary of the joint's channel values
+    return channel_values_dict
+
+
+# Load the BVH file
+filepath = "07_05.bvh"  # Replace with your file path
+mocap, frames, joints = load_bvh_file(filepath)
+encoded = encode_pose_angles(frames)
+pose_tensor = torch.tensor(encoded, dtype=torch.float32)
+
+# Get pose data for a specific frame
+FrameOfInterest = int(input("\nWhich frame do you want pose data for?\n"))
+
+# Print encoded pose for the specified frame
+print("\nFirst encoded pose tensor for frame", FrameOfInterest, ":\n", pose_tensor[FrameOfInterest])
+
+# Iterate through all joints and print their channel values for the specified frame
+print("\nChannel values for all joints at frame", FrameOfInterest, ":\n")
+for joint_name in joints:
+    joint_channel_values = get_joint_channel_values(mocap, joint_name, FrameOfInterest)
+    print(f"{joint_name} channel values:", joint_channel_values)
